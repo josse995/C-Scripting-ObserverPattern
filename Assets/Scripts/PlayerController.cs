@@ -1,5 +1,8 @@
-﻿using System.Collections;
+﻿using System;
+using System.Collections;
 using UnityEngine;
+
+
 
 public class PlayerController : MonoBehaviour
 {
@@ -15,15 +18,31 @@ public class PlayerController : MonoBehaviour
 
     private bool projectileEnabled = true;
     private WaitForSeconds shieldTimeOut;
-    
+    private GameSceneController gameScene;
+
     #endregion
+
+    public event Action HitByEnemy;
 
     #region Startup
 
     private void Start()
     {
         shieldTimeOut = new WaitForSeconds(shieldDuration);
-        EnableShield();
+        gameScene = FindObjectOfType<GameSceneController>();
+        gameScene.ScoreUpdatedOnKill += GameScene_ScoreUpdatedOnKill;
+
+        EventBroker.ProjectileOutOfBounds += EnableProjectile;
+    }
+
+    private void OnDisable()
+    {
+        EventBroker.ProjectileOutOfBounds -= EnableProjectile;
+    }
+
+    private void GameScene_ScoreUpdatedOnKill(int pointValue)
+    {
+        EnableProjectile();
     }
 
     #endregion
@@ -35,7 +54,7 @@ public class PlayerController : MonoBehaviour
     {
         MovePlayer();
 
-        if(Input.GetKeyDown(KeyCode.Space))
+        if (Input.GetKeyDown(KeyCode.Space))
         {
             if (projectileEnabled)
             {
@@ -48,7 +67,7 @@ public class PlayerController : MonoBehaviour
     {
         float horizontalMovement = Input.GetAxis("Horizontal");
 
-        if(Mathf.Abs(horizontalMovement) > Mathf.Epsilon)
+        if (Mathf.Abs(horizontalMovement) > Mathf.Epsilon)
         {
             horizontalMovement = horizontalMovement * Time.deltaTime * speed;
             horizontalMovement += transform.position.x;
@@ -64,13 +83,13 @@ public class PlayerController : MonoBehaviour
 
     #region Projectile Management
 
-    public void EnableProjectile()
+    private void EnableProjectile()
     {
         projectileEnabled = true;
         availableBullet.SetActive(projectileEnabled);
     }
 
-    public void DisableProjectile()
+    private void DisableProjectile()
     {
         projectileEnabled = false;
         availableBullet.SetActive(projectileEnabled);
@@ -83,27 +102,35 @@ public class PlayerController : MonoBehaviour
         ProjectileController projectile =
             Instantiate(projectilePrefab, spawnPosition, Quaternion.AngleAxis(90, Vector3.forward));
 
-       projectile.gameObject.GetComponent<SpriteRenderer>().color = Color.green;
+        projectile.gameObject.GetComponent<SpriteRenderer>().color = Color.green;
         projectile.gameObject.layer = LayerMask.NameToLayer("PlayerProjectile");
         projectile.isPlayers = true;
         projectile.projectileSpeed = 4;
         projectile.projectileDirection = Vector2.up;
+
+        DisableProjectile();
     }
 
     #endregion
 
-    #region Damage
 
     private void OnCollisionEnter2D(Collision2D collision)
     {
-        if(collision.gameObject.GetComponent<ProjectileController>())
+        if (collision.gameObject.GetComponent<ProjectileController>())
             TakeHit();
     }
+
+    #region Damage
 
     private void TakeHit()
     {
         GameObject xp = Instantiate(expolsion, transform.position, Quaternion.identity);
         xp.transform.localScale = new Vector2(2, 2);
+
+        if (HitByEnemy != null)
+            HitByEnemy();
+
+        gameScene.ScoreUpdatedOnKill -= GameScene_ScoreUpdatedOnKill;
 
         Destroy(gameObject);
     }
@@ -122,7 +149,7 @@ public class PlayerController : MonoBehaviour
     {
         yield return shieldTimeOut;
         shield.SetActive(false);
-        
+
     }
 
     #endregion

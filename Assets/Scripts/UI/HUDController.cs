@@ -1,7 +1,7 @@
 ﻿using UnityEngine;
 using UnityEngine.UI;
 
-public class HUDController : MonoBehaviour
+public class HUDController : MonoBehaviour, IEndGameObserver
 {
 	#region Field Declarations
 
@@ -16,6 +16,8 @@ public class HUDController : MonoBehaviour
     [Space]
     private Image[] shipImages;
 
+    private GameSceneController gameScene;
+
     #endregion
 
     #region Startup
@@ -25,11 +27,31 @@ public class HUDController : MonoBehaviour
         statusText.gameObject.SetActive(false);
     }
 
+    private void Start()
+    {
+        gameScene = FindObjectOfType<GameSceneController>();
+
+        gameScene.AddObserver(this);
+
+        gameScene.ScoreUpdatedOnKill += GameScene_ScoreUpdatedOnKill;
+        gameScene.LifeLost += GameScene_LifeLost;
+    }
+
+    private void GameScene_LifeLost(int lives)
+    {
+        HideShip(lives);
+    }
+
+    private void GameScene_ScoreUpdatedOnKill(int pointValue)
+    {
+        UpdateScore(pointValue);
+    }
+
     #endregion
 
     #region Public methods
 
-    public void UpdateScore(int score)
+    private void UpdateScore(int score)
     {
         scoreText.text = score.ToString("D5");
     }
@@ -49,6 +71,11 @@ public class HUDController : MonoBehaviour
     {
         foreach (Image ship in shipImages)
             ship.gameObject.SetActive(true);
+    }
+
+    public void Notify()
+    {
+        ShowStatus("Game Over");
     }
 
     #endregion

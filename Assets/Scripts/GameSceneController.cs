@@ -1,9 +1,14 @@
-﻿using System.Collections;
+﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
 public class GameSceneController : MonoBehaviour
 {
+
+    public event EnemyDestroyedHandler ScoreUpdatedOnKill;
+    public event Action<int> LifeLost;
+
     #region Field Declarations
 
     [Header("Enemy & Power Prefabs")]
@@ -31,11 +36,38 @@ public class GameSceneController : MonoBehaviour
 
     #endregion
 
+
+    #region Subject Implementation
+
+    private List<IEndGameObserver> endGameObservers;
+
+    public void AddObserver(IEndGameObserver observer)
+    {
+        endGameObservers.Add(observer);
+    }
+
+    public void RemoveObserver(IEndGameObserver observer)
+    {
+        endGameObservers.Remove(observer);
+    }
+
+    private void NotifyObservers()
+    {
+        foreach (var observer in endGameObservers)
+            observer.Notify();
+    }
+
+    #endregion
     #region Startup
 
     void Start()
     {
         StartLevel(currentLevelIndex);
+    }
+
+    private void Awake()
+    {
+        endGameObservers = new List<IEndGameObserver>();
     }
 
     #endregion
@@ -78,8 +110,23 @@ public class GameSceneController : MonoBehaviour
         PlayerController ship = Instantiate(playerShip, new Vector2(0, -4.67f), Quaternion.identity);
         ship.speed = playerSpeed;
         ship.shieldDuration = shieldDuration;
+        ship.HitByEnemy += Ship_HitByEnemy;
 
         yield return null;
+    }
+
+    private void Ship_HitByEnemy()
+    {
+        --lives;
+        if (LifeLost != null)
+            LifeLost(lives);
+        if (lives > 0)
+            StartCoroutine(SpawnShip(true));
+        else
+        {
+            StopAllCoroutines();
+            NotifyObservers();
+        }
     }
 
     private IEnumerator SpawnEnemies()
@@ -97,18 +144,31 @@ public class GameSceneController : MonoBehaviour
             enemy.speed = currentLevel.enemySpeed;
             enemy.shotdelayTime = currentLevel.enemyShotDelay;
             enemy.angerdelayTime = currentLevel.enemyAngerDelay;
- 
+
+            enemy.EnemyDestroyed += Enemy_EnemyDestroyed;
+
+            AddObserver(enemy);
+
             yield return wait;
         }
     }
-    
+
+    private void Enemy_EnemyDestroyed(int pointValue)
+    {
+        totalPoints += pointValue;
+
+        if (ScoreUpdatedOnKill != null)
+            ScoreUpdatedOnKill(totalPoints);
+    }
+
     private IEnumerator SpawnPowerUp()
     {
         while (true)
         {
             int index = UnityEngine.Random.Range(0, powerUpPrefabs.Length);
             Vector2 spawnPosition = ScreenBounds.RandomTopPosition();
-            Instantiate(powerUpPrefabs[index], spawnPosition, Quaternion.identity);
+            var powerup = Instantiate(powerUpPrefabs[index], spawnPosition, Quaternion.identity);
+            AddObserver(powerup);
             yield return new WaitForSeconds(UnityEngine.Random.Range(currentLevel.powerUpMinimumWait,currentLevel.powerUpMaximumWait));
         }
     }

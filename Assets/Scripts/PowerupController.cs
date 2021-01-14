@@ -1,6 +1,8 @@
 ﻿using UnityEngine;
 
-public class PowerupController :MonoBehaviour
+public delegate void PowerupHandler();
+
+public class PowerupController : MonoBehaviour, IEndGameObserver
 {
     #region Field Declarations
 
@@ -11,11 +13,13 @@ public class PowerupController :MonoBehaviour
 
     #endregion
 
+    public event PowerupHandler PowerupCollision;
+
     #region Movement
 
     void Update()
     {
-       Move();
+        Move();
     }
 
     private void Move()
@@ -23,9 +27,14 @@ public class PowerupController :MonoBehaviour
         transform.Translate(Vector2.down * Time.deltaTime * 3, Space.World);
 
         if (ScreenBounds.OutOfBounds(transform.position))
-        {
-            Destroy(gameObject);
-        }
+            RemoveAndDestroy();
+    }
+
+    private void RemoveAndDestroy()
+    {
+        var gameScene = FindObjectOfType<GameSceneController>();
+        gameScene.RemoveObserver(this);
+        Destroy(gameObject);
     }
 
     #endregion
@@ -34,12 +43,23 @@ public class PowerupController :MonoBehaviour
 
     private void OnCollisionEnter2D(Collision2D collision)
     {
-       //TODO: Apply Power ups
-       
-       Destroy(gameObject);
+        if (powerType == PowerType.Shield)
+        {
+            var player = collision.gameObject.GetComponent<PlayerController>();
+            if (player != null)
+            {
+                player.EnableShield();
+            }
+            RemoveAndDestroy();
+        }
     }
 
     #endregion
+
+    public void Notify()
+    {
+        Destroy(gameObject);
+    }
 }
 
 public enum PowerType
